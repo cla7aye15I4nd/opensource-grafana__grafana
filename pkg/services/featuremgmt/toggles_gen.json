@@ -2906,7 +2906,8 @@
       "metadata": {
         "name": "grafana.rspackBuild",
         "resourceVersion": "1789554268270",
-        "creationTimestamp": "2026-09-16T10:24:28Z"
+        "creationTimestamp": "2026-09-16T10:24:28Z",
+        "deletionTimestamp": "2026-10-08T08:31:46Z"
       },
       "spec": {
         "description": "Switches the backend to load frontend assets built with rspack instead of webpack",
