@@ -16,6 +16,7 @@ import type * as z from 'zod';
 import { type DataFrame, type DataQueryError, LoadingState } from '@grafana/data';
 import { sceneGraph, SceneDataTransformer, type SceneObject, type VizPanel } from '@grafana/scenes';
 
+import { getPanelStatusReport } from '../../scene/panelStatusReports';
 import { getElements } from '../../serialization/layoutSerializers/utils';
 import { getVizPanelKeyForPanelId } from '../../utils/utils-panels';
 import type {
@@ -69,6 +70,30 @@ export function getPanelRuntimeStatus(vizPanel: VizPanel): PanelRuntimeStatus | 
     };
   }
 
+  return withPanelStatusReport(vizPanel, getDataRuntimeStatus(vizPanel));
+}
+
+/** Adds the render outcome the panel reported; a report from before its configuration changed counts as loading. */
+function withPanelStatusReport(vizPanel: VizPanel, status?: PanelRuntimeStatus): PanelRuntimeStatus | undefined {
+  const lookup = getPanelStatusReport(vizPanel);
+  if (
+    !lookup ||
+    (status && [LoadingState.Loading, LoadingState.Streaming, LoadingState.NotStarted].includes(status.loadingState))
+  ) {
+    return status;
+  }
+  if (lookup === 'outdated') {
+    return { loadingState: LoadingState.Loading, hasError: false, hasNoData: false };
+  }
+  const base = status ?? { loadingState: LoadingState.Done, hasError: false, hasNoData: false };
+  if (lookup.report.state !== 'error') {
+    return base;
+  }
+  const { message, details } = lookup.report;
+  return { ...base, hasError: true, errors: [...(base.errors ?? []), { source: 'panel', message, details }] };
+}
+
+function getDataRuntimeStatus(vizPanel: VizPanel): PanelRuntimeStatus | undefined {
   const dataProvider = vizPanel.state.$data;
   if (!dataProvider) {
     return undefined;

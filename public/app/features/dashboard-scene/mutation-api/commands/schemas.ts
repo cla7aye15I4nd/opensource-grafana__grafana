@@ -695,7 +695,7 @@ const listPanelsPayloadSchema = z.object({
     .optional()
     .default(false)
     .describe(
-      'When true, include per-panel runtime status: loadingState, hasError, hasNoData, a structured errors array (source query/plugin/notice, message, refId/type), and info/warning notices'
+      'When true, include per-panel runtime status: loadingState, hasError, hasNoData, a structured errors array (source query/plugin/notice/panel, message, refId/type, details), and info/warning notices'
     ),
   includeSchema: z
     .boolean()
@@ -943,6 +943,17 @@ export const payloads = {
   removePanel: removePanelPayloadSchema.describe('Remove one or more panels from the dashboard'),
   getPanelErrors: listPanelsPayloadSchema
     .pick({ elements: true })
+    .extend({
+      waitMs: z
+        .number()
+        .int()
+        .min(0)
+        .max(10_000)
+        .optional()
+        .describe(
+          'Wait up to this many milliseconds for loading panels to settle before answering, for example right after a write. Panels that are not rendered are not waited for.'
+        ),
+    })
     .describe('Read current panel errors without panel specifications'),
   listPanels: listPanelsPayloadSchema.describe('List all panels on the dashboard with their layout items'),
   movePanel: movePanelPayloadSchema.describe(
