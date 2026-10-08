@@ -64,7 +64,12 @@ export interface PanelErrorsData {
   errors: Array<{ element: string; title: string; errors: PanelRuntimeError[] }>;
   noDataPanels: Array<{ element: string; title: string }>;
   panelsChecked: number;
-  uncheckedPanels: Array<{ element: string; reason: 'loading' | 'status_unavailable' | 'not_found' }>;
+  uncheckedPanels: Array<{
+    element: string;
+    reason: 'loading' | 'not_rendered' | 'status_unavailable' | 'not_found';
+    // Why a `not_rendered` panel cannot load until the user shows it: inactive tab, collapsed row or out of view.
+    detail?: string;
+  }>;
 }
 
 export interface FieldSchema {
