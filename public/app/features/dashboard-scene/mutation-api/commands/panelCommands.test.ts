@@ -26,6 +26,7 @@ import { TabItem } from '../../scene/layout-tabs/TabItem';
 import { TabsLayoutManager } from '../../scene/layout-tabs/TabsLayoutManager';
 import { PanelTimeRange } from '../../scene/panel-timerange/PanelTimeRange';
 import { getUpdatedHoverHeader } from '../../scene/panel-timerange/utils';
+import { setPanelStatusReport } from '../../scene/panelStatusReports';
 import { getQueryRunnerFor } from '../../utils/getQueryRunnerFor';
 import {
   EXTRACT_FIELDS_FIXTURE,
@@ -574,6 +575,84 @@ describe('Panel mutation commands', () => {
         uncheckedPanels: [{ element: 'below', reason: 'not_rendered', detail: 'out of view' }],
       });
       mockSystemTransformationPlugins.delete('timeseries');
+    });
+  });
+
+  describe('GET_PANEL_ERRORS with panel status reports', () => {
+    function buildDrawingScene() {
+      const panel = new VizPanel({
+        key: 'panel-1',
+        title: 'Drawing',
+        pluginId: 'custom-viz',
+        options: { source: 'a' },
+      });
+      const scene = buildPanelScene([panel], { drawing: 1 });
+      return { panel, scene, client: new DashboardMutationClient(scene) };
+    }
+
+    it('reports render errors the panel reports about itself next to its query state', async () => {
+      const { panel, scene, client } = buildDrawingScene();
+      attachPanelData(
+        scene,
+        'Drawing',
+        makePanelData({ series: [toDataFrame({ fields: [{ name: 'Value', values: [1] }] })] })
+      );
+      setPanelStatusReport(panel, { state: 'error', message: 'x is not defined', details: 'line 3' });
+
+      const result = await client.execute({ type: 'GET_PANEL_ERRORS', payload: {} });
+      expect(result.data).toEqual({
+        errors: [
+          {
+            element: 'drawing',
+            title: 'Drawing',
+            errors: [{ source: 'panel', message: 'x is not defined', details: 'line 3' }],
+          },
+        ],
+        noDataPanels: [],
+        panelsChecked: 1,
+        uncheckedPanels: [],
+      });
+    });
+
+    it('checks a panel without a data provider once it reports, and clears the error on an ok report', async () => {
+      const { panel, client } = buildDrawingScene();
+      setPanelStatusReport(panel, { state: 'error' });
+
+      const failed = await client.execute({ type: 'GET_PANEL_ERRORS', payload: {} });
+      expect(failed.data).toEqual({
+        errors: [
+          {
+            element: 'drawing',
+            title: 'Drawing',
+            errors: [{ source: 'panel' }],
+          },
+        ],
+        noDataPanels: [],
+        panelsChecked: 1,
+        uncheckedPanels: [],
+      });
+
+      setPanelStatusReport(panel, { state: 'ok' });
+      const fixed = await client.execute({ type: 'GET_PANEL_ERRORS', payload: {} });
+      expect(fixed.data).toEqual({ errors: [], noDataPanels: [], panelsChecked: 1, uncheckedPanels: [] });
+    });
+
+    it('treats a panel as loading after its options change until it reports again, and waits for it', async () => {
+      const { panel, client } = buildDrawingScene();
+      setPanelStatusReport(panel, { state: 'error', message: 'Draw failed' });
+      panel.setState({ options: { source: 'b' } });
+
+      const outdated = await client.execute({ type: 'GET_PANEL_ERRORS', payload: {} });
+      expect(outdated.data).toEqual({
+        errors: [],
+        noDataPanels: [],
+        panelsChecked: 0,
+        uncheckedPanels: [{ element: 'drawing', reason: 'loading' }],
+      });
+
+      setTimeout(() => setPanelStatusReport(panel, { state: 'ok' }), 150);
+      const settled = await client.execute({ type: 'GET_PANEL_ERRORS', payload: { waitMs: 5000 } });
+      expect(settled.data).toEqual({ errors: [], noDataPanels: [], panelsChecked: 1, uncheckedPanels: [] });
     });
   });
 

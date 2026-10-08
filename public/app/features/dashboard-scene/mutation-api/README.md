@@ -615,9 +615,21 @@ Read current errors on the open dashboard without returning panel specifications
 { "type": "GET_PANEL_ERRORS", "payload": { "elements": ["panel-1", "panel-5"] } }
 ```
 
-Omit `elements` to inspect all elements. The response includes `errors` (element name, title, and structured query/plugin/error-notice messages), separate `noDataPanels`, `panelsChecked`, and `uncheckedPanels` with reasons `loading`, `not_rendered`, `status_unavailable`, or `not_found`. Loading panels do not report stale errors. `not_rendered` marks a panel that cannot load until the user shows it, with a `detail` of `inactive tab`, `collapsed row`, or `out of view` (lazy dashboards run a panel's queries once it is scrolled near the viewport). Empty error lists do not establish that unchecked panels are healthy; render those panels and check again. Callers should detect command availability on older Grafana versions.
+Omit `elements` to inspect all elements. The response includes `errors` (element name, title, and structured query/plugin/error-notice/panel messages), separate `noDataPanels`, `panelsChecked`, and `uncheckedPanels` with reasons `loading`, `not_rendered`, `status_unavailable`, or `not_found`. Loading panels do not report stale errors. `not_rendered` marks a panel that cannot load until the user shows it, with a `detail` of `inactive tab`, `collapsed row`, or `out of view` (lazy dashboards run a panel's queries once it is scrolled near the viewport). Empty error lists do not establish that unchecked panels are healthy; render those panels and check again. Callers should detect command availability on older Grafana versions.
 
 Pass `waitMs` (at most 10000) to wait for loading panels to settle before the response, for example right after a write. Older Grafana versions ignore it and answer immediately.
+
+Panel plugins can report failures the host cannot see from query data, such as a drawing or parsing error. These appear with `source: "panel"`:
+
+```tsx
+const { reportPanelStatus } = usePanelContext();
+// No dependency list: report after every render, including renders that did not change the outcome.
+useEffect(() => {
+  reportPanelStatus?.(drawError ? { state: 'error', message: drawError.message } : { state: 'ok' });
+});
+```
+
+The last report per panel is kept across whole-spec writes. Once the panel's options or field config change, the panel counts as `loading` until it reports again, so callers never read the previous outcome as current.
 
 ### `LIST_PANELS`
 
